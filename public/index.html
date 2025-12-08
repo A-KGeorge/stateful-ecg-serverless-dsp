@@ -368,7 +368,6 @@
           const data = JSON.parse(event.data);
 
           if (data.error) {
-            // No data in Redis yet
             isDemoMode = true;
             document.getElementById("connection-status").className =
               "disconnected";
@@ -377,7 +376,14 @@
             isDemoMode = false;
             document.getElementById("connection-status").className =
               "connected";
-            updateDashboard(data);
+
+            // FIX: Push to queue instead of updating directly
+            updateQueue.push(data);
+
+            // Start the queue processor if it's not running
+            if (!isProcessingQueue) {
+              processUpdateQueue();
+            }
           }
         };
 

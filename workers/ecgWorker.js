@@ -90,7 +90,7 @@ async function processJob(job) {
     await publishResult({
       sensorId,
       ...resultData,
-      samples: samples.slice(0, 360), // Send raw ECG samples for waveform
+      samples: Array.from(samples.slice(0, 360)), // Send raw ECG samples for waveform
       peakIndices: result.peaks.map((p) => p % 360), // Convert to local indices
     });
 
