@@ -336,6 +336,7 @@
       let totalSamples = 0;
       let lastResultTimestamp = 0;
       let isDemoMode = false;
+      let startTime = 0; // Track absolute start time for axis labeling
 
       // WebSocket connection for real-time updates
       let ws;
@@ -505,10 +506,17 @@
       }
 
       function updateWaveform(samples, peaks) {
+        // Initialize start time on first data
+        if (ecgData.length === 0 && startTime === 0) {
+          startTime = totalSamples / 360; // Calculate absolute start time in seconds
+        }
+
         // Add new samples to buffer
         ecgData.push(...samples);
         if (ecgData.length > maxDataPoints) {
+          const removed = ecgData.length - maxDataPoints;
           ecgData = ecgData.slice(-maxDataPoints);
+          startTime += removed / 360; // Update start time as we remove old data
         }
 
         // Draw waveform
@@ -542,19 +550,24 @@
           return;
         }
 
+        // Define margins for axes
+        const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+        const plotWidth = canvas.width - margin.left - margin.right;
+        const plotHeight = canvas.height - margin.top - margin.bottom;
+
         // Draw grid
         ctx.strokeStyle = "#222";
         ctx.lineWidth = 1;
-        for (let i = 0; i < canvas.width; i += 50) {
+        for (let i = 0; i < plotWidth; i += 50) {
           ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i, canvas.height);
+          ctx.moveTo(margin.left + i, margin.top);
+          ctx.lineTo(margin.left + i, margin.top + plotHeight);
           ctx.stroke();
         }
-        for (let i = 0; i < canvas.height; i += 50) {
+        for (let i = 0; i < plotHeight; i += 50) {
           ctx.beginPath();
-          ctx.moveTo(0, i);
-          ctx.lineTo(canvas.width, i);
+          ctx.moveTo(margin.left, margin.top + i);
+          ctx.lineTo(margin.left + plotWidth, margin.top + i);
           ctx.stroke();
         }
 
@@ -562,7 +575,65 @@
         const minVal = Math.min(...ecgData);
         const maxVal = Math.max(...ecgData);
         const range = maxVal - minVal;
-        const scale = (canvas.height - 40) / range;
+        const scale = plotHeight / range;
+
+        // Draw axes
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 2;
+
+        // Y-axis
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left, margin.top + plotHeight);
+        ctx.stroke();
+
+        // X-axis
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top + plotHeight);
+        ctx.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+        ctx.stroke();
+
+        // Y-axis labels (amplitude)
+        ctx.fillStyle = "#999";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+
+        const numYTicks = 5;
+        for (let i = 0; i <= numYTicks; i++) {
+          const value = minVal + (range * i) / numYTicks;
+          const y = margin.top + plotHeight - (i * plotHeight) / numYTicks;
+          ctx.fillText(value.toFixed(2), margin.left - 10, y);
+        }
+
+        // Y-axis label
+        ctx.save();
+        ctx.translate(15, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#aaa";
+        ctx.font = "14px sans-serif";
+        ctx.fillText("Amplitude (mV)", 0, 0);
+        ctx.restore();
+
+        // X-axis labels (time in seconds)
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#999";
+
+        const durationSeconds = ecgData.length / 360; // 360 Hz sampling rate
+        const endTime = startTime + durationSeconds; // Absolute end time
+        const numXTicks = 6;
+        for (let i = 0; i <= numXTicks; i++) {
+          const time = startTime + (durationSeconds * i) / numXTicks;
+          const x = margin.left + (i * plotWidth) / numXTicks;
+          ctx.fillText(time.toFixed(1) + "s", x, margin.top + plotHeight + 5);
+        }
+
+        // X-axis label
+        ctx.fillStyle = "#aaa";
+        ctx.font = "14px sans-serif";
+        ctx.fillText("Time (seconds)", canvas.width / 2, canvas.height - 5);
 
         // Draw ECG waveform
         ctx.strokeStyle = "#0f0";
@@ -570,8 +641,8 @@
         ctx.beginPath();
 
         for (let i = 0; i < ecgData.length; i++) {
-          const x = (i / ecgData.length) * canvas.width;
-          const y = canvas.height - 20 - (ecgData[i] - minVal) * scale;
+          const x = margin.left + (i / ecgData.length) * plotWidth;
+          const y = margin.top + plotHeight - (ecgData[i] - minVal) * scale;
 
           if (i === 0) {
             ctx.moveTo(x, y);
@@ -585,8 +656,9 @@
         ctx.fillStyle = "#f00";
         peakIndices.forEach((peakIdx) => {
           if (peakIdx < ecgData.length) {
-            const x = (peakIdx / ecgData.length) * canvas.width;
-            const y = canvas.height - 20 - (ecgData[peakIdx] - minVal) * scale;
+            const x = margin.left + (peakIdx / ecgData.length) * plotWidth;
+            const y =
+              margin.top + plotHeight - (ecgData[peakIdx] - minVal) * scale;
 
             ctx.beginPath();
             ctx.arc(x, y, 5, 0, 2 * Math.PI);
@@ -594,7 +666,8 @@
 
             // Draw heart icon above peak
             ctx.font = "20px sans-serif";
-            ctx.fillText("❤️", x - 10, y - 15);
+            ctx.textAlign = "center";
+            ctx.fillText("❤️", x, y - 15);
           }
         });
       }
