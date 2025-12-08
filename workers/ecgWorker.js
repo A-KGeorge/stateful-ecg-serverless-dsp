@@ -66,12 +66,16 @@ async function processJob(job) {
     const result = await processEcgChunk(samples, previousState, {
       chunkIndex,
       lastPeakSample: metadata.lastPeakSample || null,
+      rrHistory: metadata.rrHistory || [],
     });
     const processingTime = Date.now() - startTime;
 
     // Save new state and metadata for next chunk
     await savePipelineState(sensorId, result.state);
-    await saveMetadata(sensorId, { lastPeakSample: result.lastPeakSample });
+    await saveMetadata(sensorId, {
+      lastPeakSample: result.lastPeakSample,
+      rrHistory: result.rrHistory,
+    });
 
     // Store results
     const resultData = {
