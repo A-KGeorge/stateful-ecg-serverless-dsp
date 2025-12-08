@@ -175,11 +175,13 @@ const pipeline = createDspPipeline({ channels: 1, sampleRate: 360 });
 
 // Stage 1: Bandpass Filter (5-15 Hz)
 // Isolates QRS complex energy, removes baseline wander and T-waves
-pipeline.IIRFilter({
-  type: "bandpass",
-  lowCutoff: 5,
-  highCutoff: 15,
+pipeline.filter({
+  type: "butterworth",
+  mode: "bandpass",
+  lowCutoffFrequency: 5,
+  highCutoffFrequency: 15,
   order: 2,
+  sampleRate: 360,
 });
 
 // Stage 2: Differentiation
