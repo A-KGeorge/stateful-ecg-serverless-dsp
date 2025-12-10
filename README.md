@@ -636,22 +636,6 @@ func azure functionapp publish ecg-monitor \
 - [MIT-BIH Database](https://www.kaggle.com/datasets/protobioengineering/mit-bih-arrhythmia-database-modern-2023/data) - Standard ECG benchmark dataset
 - [Serverless Framework](https://www.serverless.com/) - Deployment automation
 
-## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
-
-- [ ] Add WebSocket server for real-time dashboard updates
-- [ ] Implement more arrhythmia detection rules (AFib, VFib, Asystole)
-- [ ] Add multi-lead support (12-lead ECG)
-- [ ] Build Grafana dashboards for monitoring at scale
-- [ ] Add Kubernetes deployment manifests (Knative)
-- [ ] Implement state compression (zlib/brotli for Redis)
-- [ ] Add comprehensive unit tests for arrhythmia detection
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
 ## 🙏 Acknowledgments
 
 - **Pan & Tompkins** for the QRS detection algorithm
