@@ -22,20 +22,32 @@ import {
   saveMetadata,
   loadMetadata,
   publishResult,
+  ackEcgJob,
+  recoverPendingJobs,
+  initializeConsumerGroup,
 } from "../lib/redisStore.js";
 import { processEcgChunk } from "../lib/ecgPipeline.js";
 import * as fs from "fs";
+
+// Worker configuration
+const CONSUMER_NAME = `ecg-worker-${process.pid}`;
+let running = false;
+let pelCleanupInterval;
 
 /**
  * Process a single ECG job
  * @param {Object} job - ECG processing job
  */
 async function processJob(job) {
-  const { id, sensorId, chunkIndex, samples } = job;
+  const { id, sensorId, chunkIndex, samples, messageId, deliveryCount } = job;
 
   console.log(`\n▶ Processing job ${id}`);
   console.log(`  Sensor: ${sensorId}`);
   console.log(`  Chunk: ${chunkIndex} (${samples.length} samples)`);
+
+  if (deliveryCount) {
+    console.log(`  📦 Recovered message (delivery #${deliveryCount})`);
+  }
 
   fs.appendFileSync(
     "worker.log",
@@ -132,6 +144,11 @@ async function processJob(job) {
       "worker.log",
       `✓ Job ${id} completed in ${processingTime}ms\n`
     );
+
+    // Acknowledge message
+    if (messageId) {
+      await ackEcgJob(messageId);
+    }
   } catch (error) {
     console.error(`✗ Job ${id} failed:`, error.message);
     fs.appendFileSync("worker.log", `✗ Job ${id} failed: ${error.message}\n`);
@@ -140,15 +157,81 @@ async function processJob(job) {
 }
 
 /**
+ * Recover pending messages from PEL
+ */
+async function recoverPendingMessages() {
+  console.log("🔍 Checking for pending messages...");
+
+  try {
+    const recovered = await recoverPendingJobs(CONSUMER_NAME);
+
+    if (recovered.length === 0) {
+      console.log("✅ No pending messages found");
+      return;
+    }
+
+    console.log(
+      `⚠️  Found ${recovered.length} pending messages, recovering...`
+    );
+
+    for (const job of recovered) {
+      await processJob(job);
+    }
+
+    console.log("✅ Pending message recovery complete");
+  } catch (err) {
+    console.error("❌ Error during PEL recovery:", err);
+  }
+}
+
+/**
+ * Start periodic PEL cleanup (every 5 minutes)
+ */
+function startPelCleanup() {
+  pelCleanupInterval = setInterval(async () => {
+    if (running) {
+      await recoverPendingMessages();
+    }
+  }, 5 * 60 * 1000);
+}
+
+/**
+ * Graceful shutdown
+ */
+async function shutdown() {
+  console.log("⚠️  Shutting down gracefully...");
+  running = false;
+
+  if (pelCleanupInterval) {
+    clearInterval(pelCleanupInterval);
+  }
+
+  console.log("👋 ECG Worker stopped");
+  process.exit(0);
+}
+
+/**
  * Main worker loop
  */
 async function main() {
   console.log("❤️  ECG Worker started");
-  console.log("Ready to process heartbeats...\n");
+  console.log(`   Consumer: ${CONSUMER_NAME}`);
+  console.log("   Ready to process heartbeats...\n");
+
+  // Initialize consumer group
+  await initializeConsumerGroup();
+
+  // Recover any pending messages
+  await recoverPendingMessages();
+
+  // Start periodic PEL cleanup
+  startPelCleanup();
+
+  running = true;
 
   // Poll for jobs (in production, this would be event-driven)
-  while (true) {
-    const job = await dequeueEcgJob();
+  while (running) {
+    const job = await dequeueEcgJob(CONSUMER_NAME);
 
     if (job) {
       await processJob(job);
@@ -158,6 +241,10 @@ async function main() {
     }
   }
 }
+
+// Graceful shutdown handlers
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 main().catch((error) => {
   console.error("Worker crashed:", error);
