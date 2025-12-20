@@ -25,6 +25,7 @@ import {
   ackEcgJob,
   recoverPendingJobs,
   initializeConsumerGroup,
+  getQueueDepth,
 } from "../lib/redisStore.js";
 import { processEcgChunk } from "../lib/ecgPipeline.js";
 import * as fs from "fs";
@@ -228,16 +229,49 @@ async function main() {
   startPelCleanup();
 
   running = true;
+  let consecutiveEmptyPolls = 0;
+  let backlogMode = false;
 
   // Poll for jobs (in production, this would be event-driven)
   while (running) {
     const job = await dequeueEcgJob(CONSUMER_NAME);
 
     if (job) {
+      consecutiveEmptyPolls = 0;
+
+      // Check queue depth to detect backlog
+      const queueDepth = await getQueueDepth();
+
+      // Enter backlog mode if queue has more than 10 pending jobs
+      if (!backlogMode && queueDepth > 10) {
+        backlogMode = true;
+        console.log(
+          `\n🚀 BACKLOG DETECTED: ${queueDepth} pending jobs - Processing at maximum speed!`
+        );
+      }
+
       await processJob(job);
+
+      // Exit backlog mode when caught up
+      if (backlogMode && queueDepth <= 5) {
+        backlogMode = false;
+        console.log(
+          `\n✅ BACKLOG CLEARED: Caught up! Resuming normal operation.\n`
+        );
+      }
+
+      // In backlog mode, process continuously without delay
+      // In normal mode, continue immediately if there are more jobs
+      if (!backlogMode && queueDepth === 0) {
+        // Only add minimal delay if queue is empty
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
     } else {
-      // No jobs available, wait a bit
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      consecutiveEmptyPolls++;
+
+      // If we've had multiple empty polls, wait a bit longer
+      const waitTime = consecutiveEmptyPolls > 5 ? 100 : 10;
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
 }

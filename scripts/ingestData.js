@@ -58,18 +58,28 @@ function parseEcgFile(filePath) {
 }
 
 /**
- * Ingest signal as chunked jobs
+ * Sleep utility for real-time simulation
+ * @param {number} ms - Milliseconds to sleep
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Ingest signal as chunked jobs (simulates real-time streaming)
  * @param {number[]} signal - ECG signal array
  * @param {string} sensorId - Sensor identifier
  */
 async function ingestSignal(signal, sensorId) {
   const numChunks = Math.floor(signal.length / CHUNK_SIZE);
+  const delayMs = CHUNK_DURATION * 1000; // Convert seconds to milliseconds
 
   console.log(
-    `🔄 Batching into ${numChunks} chunks of ${CHUNK_DURATION}s each...`
+    `🔄 Streaming ${numChunks} chunks in real-time (${CHUNK_DURATION}s intervals)...`
   );
+  console.log(`   This will take approximately ${numChunks} seconds\n`);
 
-  let jobsQueued = 0;
+  const startTime = Date.now();
 
   for (let i = 0; i < numChunks; i++) {
     const start = i * CHUNK_SIZE;
@@ -83,15 +93,23 @@ async function ingestSignal(signal, sensorId) {
       samples: new Float32Array(chunk),
     });
 
-    jobsQueued++;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(
+      `  ⏱️  [${elapsed}s] Streamed chunk ${
+        i + 1
+      }/${numChunks} (${CHUNK_SIZE} samples)`
+    );
 
-    if (jobsQueued % 10 === 0) {
-      console.log(`  Queued ${jobsQueued}/${numChunks} chunks...`);
+    // Wait for chunk duration to simulate real-time data arrival
+    // Skip delay on last chunk
+    if (i < numChunks - 1) {
+      await sleep(delayMs);
     }
   }
 
-  console.log(`\n✓ Queued ${jobsQueued} jobs for sensor: ${sensorId}`);
-  console.log(`  Estimated processing time: ${numChunks}s`);
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\n✓ Completed streaming ${numChunks} chunks in ${totalTime}s`);
+  console.log(`  Sensor: ${sensorId}`);
 }
 
 /**

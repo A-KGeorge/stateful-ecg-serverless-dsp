@@ -347,6 +347,7 @@
       let isProcessingQueue = false;
       let lastUpdate = 0;
       const UPDATE_INTERVAL = 1000; // 1 second per chunk (real-time playback)
+      let latestChunkIndex = 0; // Track the latest chunk being processed
 
       function connectWebSocket() {
         const wsProtocol =
@@ -378,7 +379,14 @@
             document.getElementById("connection-status").className =
               "connected";
 
-            // FIX: Push to queue instead of updating directly
+            // Update chunk index immediately (not throttled) to show real-time progress
+            if (data.chunkIndex !== undefined) {
+              latestChunkIndex = data.chunkIndex;
+              document.getElementById("chunk-index").textContent =
+                latestChunkIndex;
+            }
+
+            // Push to queue for throttled waveform updates
             updateQueue.push(data);
 
             // Start the queue processor if it's not running
@@ -435,15 +443,13 @@
       function updateDashboard(data) {
         document.getElementById("connection-status").className = "connected";
 
-        // Update metrics
+        // Update metrics (chunk-index is updated immediately in onmessage, not here)
         document.getElementById("heart-rate").textContent = data.bpm || "--";
         document.getElementById("hrv").textContent = data.hrv || "--";
         document.getElementById("latency").textContent =
           data.processingTime || "--";
         document.getElementById("sensor-id").textContent =
           data.sensorId || "Unknown";
-        document.getElementById("chunk-index").textContent =
-          data.chunkIndex || "-";
         document.getElementById("state-size").textContent = "758";
 
         // Update peak count
