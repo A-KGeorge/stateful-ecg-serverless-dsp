@@ -7,7 +7,8 @@
  * 3. Queuing chunks for worker processing
  *
  * Usage:
- *   npm run ingest -- --file data/100_.csv --sensor patient-001
+ *   npm run ingest -- data/100_ekg.csv patient-001
+ *   node scripts/ingestData.js data/100_ekg.csv patient-001
  */
 
 import { readFileSync } from "fs";
@@ -122,14 +123,16 @@ async function main() {
   let filePath = "data/100_ekg.csv"; // Default MIT-BIH record
   let sensorId = `patient-${Date.now()}`;
 
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--file" && args[i + 1]) {
-      filePath = args[i + 1];
-      i++; // Skip next arg since we consumed it
-    } else if (args[i] === "--sensor" && args[i + 1]) {
-      sensorId = args[i + 1];
-      i++; // Skip next arg since we consumed it
+  // Use positional arguments: filePath sensorId
+  if (args.length >= 1) {
+    filePath = args[0];
+    // If not absolute path and doesn't start with data/, prepend data/
+    if (!filePath.startsWith("/") && !filePath.startsWith("data/")) {
+      filePath = `data/${filePath}`;
     }
+  }
+  if (args.length >= 2) {
+    sensorId = args[1];
   }
 
   console.log("🏥 ECG Data Ingestion Started");
