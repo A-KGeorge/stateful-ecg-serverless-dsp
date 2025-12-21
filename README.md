@@ -116,7 +116,7 @@ npm run worker
 
 ```bash
 # Process MIT-BIH Record 100 (arrhythmia patient)
-npm run ingest -- --file data/100_ekg.csv --sensor patient-demo
+npm run ingest -- data/100_ekg.csv patient-demo
 ```
 
 **Terminal 4: View Real-Time Dashboard**
