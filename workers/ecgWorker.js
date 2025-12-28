@@ -9,7 +9,7 @@
  * 5. Stores results
  *
  * In production, this would be deployed as:
- * - AWS Lambda triggered by SQS
+ * - AWS Lambda triggered by SQS or Kinesis
  * - Google Cloud Function triggered by Pub/Sub
  * - Azure Function triggered by Service Bus
  */
