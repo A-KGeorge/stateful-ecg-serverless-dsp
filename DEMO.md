@@ -24,7 +24,6 @@ Open **4 terminals**:
 #### Terminal 1: Worker
 
 ```bash
-cd "e:\Programming_projects\Full stack Web dev\ecg-monitor"
 npm run worker
 ```
 
@@ -41,7 +40,6 @@ Expected output:
 #### Terminal 2: Dashboard Server
 
 ```bash
-cd "e:\Programming_projects\Full stack Web dev\ecg-monitor"
 npm start
 ```
 
@@ -68,7 +66,6 @@ You should see:
 #### Terminal 4: Data Ingestion
 
 ```bash
-cd "e:\Programming_projects\Full stack Web dev\ecg-monitor"
 npm run ingest -- data/100_ekg.csv patient-demo
 ```
 
