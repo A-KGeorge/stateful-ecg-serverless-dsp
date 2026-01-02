@@ -1,5 +1,9 @@
 # ECG Monitor Architecture Documentation
 
+## Architecture: Stateful Serverless ECG DSPCore Philosophy
+
+This project demonstrates a Hybrid Stateful-Serverless architecture. While Digital Signal Processing (DSP) is traditionally handled by long-running stateful servers, we utilize a sub-millisecond external state store (Redis) to allow ephemeral compute (Lambda) to perform complex, multi-stage filtering on continuous streams.
+
 ## Quick Reference: Production Deployment
 
 | Decision            | Recommendation                        | Impact                   | Cost        |
@@ -55,6 +59,37 @@ graph TD
     style E fill:#dc382d,stroke:#333,stroke-width:3px
     style G fill:#4a9eff,stroke:#333,stroke-width:3px
     style J fill:#28a745,stroke:#333,stroke-width:3px
+```
+
+## Technical Component Details
+
+### 1. Ingestion Layer (API Gateway / WebSocket)
+
+Receives 1-second ECG chunks. In a production AWS environment, this would be handled by AWS IoT Core or API Gateway WebSocket, which preserves the connection while triggering the processing Lambda.
+
+### 2. Processing Layer (AWS Lambda)
+
+Executes the ecgPipeline.js.
+
+- **Stateless Logic**: The Pan-Tompkins algorithm logic.
+- **State Recovery**: At the start of every execution, the Lambda fetches the last $N$ samples and filter coefficients from Redis.
+- **Result**: Detects R-peaks and calculates heart rate (BPM).
+
+### 3. State Store (ElastiCache Redis)
+
+The "Heart" of the architecture. It stores:
+
+- `raw_buffer`: The last 1 second of signal to ensure filter continuity across 1-second chunk boundaries.
+- `filter_state`: Previous IIR filter outputs ($y[n-1], y[n-2]$) to prevent phase distortion and "ringing" at the start of new chunks.
+
+### Data Flow
+
+```
+POST /ingest { patientId, data }
+GET state:{patientId} from Redis
+RUN DSP Pipeline (Bandpass -> Derivative -> Squaring -> Integration)
+SET state:{patientId} back to Redis with updated buffers
+EMIT Heart Rate / Arrhythmia alerts
 ```
 
 ## Data Flow Sequence
@@ -261,32 +296,51 @@ graph LR
 
 ## Cost Analysis
 
-```mermaid
-pie title Monthly Cost Comparison (1,000 Patients)
-    "Serverless (Lambda + Redis)" : 750
-    "EC2 (c5.2xlarge 24/7)" : 2920
-```
+### Economic Analysis: The Scalability Trade-off
 
-### Detailed Cost Breakdown
+#### 1. The "Bursty" Monitoring Scenario (Documented Case)
+
+Optimized for low-utilization or intermittent monitoring of 1,000 patients.
 
 **Serverless Architecture** (AWS Lambda + ElastiCache):
 
-- Lambda invocations: 86.4M requests/month × $0.0000002 = $17.28
-- Lambda compute: 86.4M × 3ms × $0.0000166667/GB-sec (256MB) = $432
+- Lambda Invocations: 86.4M requests/month × $0.0000002 = $17.28
+- Lambda Compute: 86.4M × 3ms × $0.0000166667/GB-sec (256MB) = $432
 - ElastiCache (t3.medium): $100/month
-- Data transfer: ~$200/month
+- Data Transfer: ~$200/month
 - **Total**: ~$750/month
 
-**Traditional EC2**:
+**Traditional EC2** (Standard Provisioning):
 
-- c5.2xlarge (8 vCPU, 16GB): $0.34/hour × 730 hours = $248.20/month
+- c5.2xlarge Instance: $0.34/hour × 730 hours = $248.20/month
 - 10× instances for redundancy: $2,482/month
-- Load balancer: $20/month
-- EBS volumes: $100/month
-- Monitoring: $50/month
+- Overhead (LB, EBS, Monitoring): $170/month
 - **Total**: ~$2,920/month
 
-**Savings**: 74% reduction with serverless
+**Savings**: ~74% reduction in costs when assuming high redundancy requirements on traditional hardware.
+
+#### 2. The "Worst-Case" Analysis: True 24/7 Monitoring
+
+Independent audit for 1,000 patients monitored 24/7 (continuous streaming). If the workload shifts from intermittent to a continuous clinical stream, the economic profile flips significantly.
+
+| Metric              | Serverless (Worst-Case)          | Traditional (Optimized EC2)       |
+| ------------------- | -------------------------------- | --------------------------------- |
+| Request Volume      | 2,592M requests/month            | N/A (Persistent Socket)           |
+| Compute Cost        | $12,960/month (at 24/7 scale)    | $482/month (2× c5.2xlarge RI)     |
+| State Storage       | $1,000+ (Clustered Redis needed) | Local RAM (Free/Included)         |
+| Operational Effort  | Low (Automatic Scaling)          | High (OS/Patching/Manual Scaling) |
+| Infrastructure Risk | Redis Connection Limits          | Instance State Loss on Failure    |
+
+**Verdict**:
+
+- Serverless is the winner for ambulatory monitoring, home health, and bursty diagnostic workloads where the overhead of managing clusters outweighs the compute cost.
+- Traditional EC2/EKS is the winner for ICU/Critical Care scenarios where 1,000+ patients generate continuous, non-stop data, as the unit cost of Lambda requests eventually exceeds the cost of dedicated silicon.
+
+```mermaid
+pie title Monthly Cost Comparison (1,000 Patients - Bursty Scenario)
+    "Serverless (Lambda + Redis)" : 750
+    "EC2 (c5.2xlarge 24/7)" : 2920
+```
 
 ## State Format Specification
 
@@ -521,6 +575,6 @@ await cloudwatch.putMetricData({
 
 ---
 
-**Last Updated**: December 2025  
-**Version**: 1.0.0  
+**Last Updated**: January 2026  
+**Version**: 1.1.0  
 **Author**: A-KGeorge
