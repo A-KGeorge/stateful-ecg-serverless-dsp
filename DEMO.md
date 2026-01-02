@@ -69,7 +69,7 @@ You should see:
 
 ```bash
 cd "e:\Programming_projects\Full stack Web dev\ecg-monitor"
-npm run ingest -- --file data/100_ekg.csv --sensor patient-demo
+npm run ingest -- data/100_ekg.csv patient-demo
 ```
 
 Expected output:
