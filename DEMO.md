@@ -244,5 +244,3 @@ rm worker.log
 - **Fix**: Download MIT-BIH dataset from Kaggle and place in `data/100_ekg.csv`
 
 ---
-
-**Ready to impress!** 🚀
