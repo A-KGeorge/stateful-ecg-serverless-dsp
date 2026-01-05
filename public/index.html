@@ -447,7 +447,7 @@
         document.getElementById("heart-rate").textContent = data.bpm || "--";
         document.getElementById("hrv").textContent = data.hrv || "--";
         document.getElementById("latency").textContent =
-          data.processingTime || "--";
+          data.processingTime.toFixed(2) || "--";
         document.getElementById("sensor-id").textContent =
           data.sensorId || "Unknown";
         document.getElementById("state-size").textContent = "758";

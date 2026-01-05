@@ -29,6 +29,7 @@ import {
 } from "../lib/redisStore.js";
 import { processEcgChunk } from "../lib/ecgPipeline.js";
 import * as fs from "fs";
+import { performance } from "perf_hooks";
 
 // Worker configuration
 const CONSUMER_NAME = `ecg-worker-${process.pid}`;
@@ -44,7 +45,7 @@ async function processJob(job) {
 
   console.log(`\n▶ Processing job ${id}`);
   console.log(`  Sensor: ${sensorId}`);
-  console.log(`  Chunk: ${chunkIndex} (${samples.length} samples)`);
+  console.log(`  Chunk: ${chunkIndex}`);
 
   if (deliveryCount) {
     console.log(`  📦 Recovered message (delivery #${deliveryCount})`);
@@ -75,13 +76,13 @@ async function processJob(job) {
     }
 
     // Process the chunk with state continuity
-    const startTime = Date.now();
+    const startTime = performance.now();
     const result = await processEcgChunk(samples, previousState, {
       chunkIndex,
       lastPeakSample: metadata.lastPeakSample || null,
       rrHistory: metadata.rrHistory || [],
     });
-    const processingTime = Date.now() - startTime;
+    const processingTime = performance.now() - startTime;
 
     // Save new state and metadata for next chunk
     await savePipelineState(sensorId, result.state);
@@ -89,6 +90,11 @@ async function processJob(job) {
       lastPeakSample: result.lastPeakSample,
       rrHistory: result.rrHistory,
     });
+
+    // Log state size
+    const stateSize = result.state.byteLength || result.state.length;
+    console.log(`  State: ${stateSize} bytes`);
+    fs.appendFileSync("worker.log", `  State: ${stateSize} bytes\n`);
 
     // Store results
     const resultData = {
@@ -140,10 +146,10 @@ async function processJob(job) {
       );
     }
 
-    console.log(`✓ Job ${id} completed in ${processingTime}ms`);
+    console.log(`✓ Job ${id} completed in ${processingTime} ms`);
     fs.appendFileSync(
       "worker.log",
-      `✓ Job ${id} completed in ${processingTime}ms\n`
+      `✓ Job ${id} completed in ${processingTime} ms\n`
     );
 
     // Acknowledge message
